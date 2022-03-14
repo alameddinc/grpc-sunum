@@ -1,0 +1,30 @@
+syntax = "proto3";
+package fish;
+
+option go_package = "./../pkg/protoGo";
+
+message RequestMessage {
+  uint64 x = 1;
+  uint64 y = 2;
+  string username = 3;
+}
+
+message ResponseMessage {
+  string username = 1;
+  bool status = 4;
+}
+
+message RequestHighScore{
+  string username=1;
+}
+
+message ResponseHighScore{
+  map<string,int64> Users = 1;
+  int64 yourRank = 2;
+  bool status = 3;
+}
+
+service FishService {
+  rpc TryToCatch(stream RequestMessage) returns (stream ResponseMessage) {}
+  rpc HighScore(RequestHighScore) returns (ResponseHighScore) {}
+}
