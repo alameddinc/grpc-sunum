@@ -2,70 +2,101 @@ package fishServer
 
 import (
 	"context"
+	"errors"
 	"google.golang.org/grpc"
 	"io"
 	"log"
 	"server/pkg/protoGo"
+	"sync"
+	"time"
 )
 
 type FishServer struct {
 	protoGo.UnimplementedFishServiceServer
-	UserScores map[string]uint
-	Users map[protoGo.FishService_TryToCatchServer]bool
+	UserScores    map[string]uint
+	Users         map[protoGo.FishService_TryToCatchServer]bool
+	userLimit     int
+	mutex         *sync.Mutex
+	completedGame chan bool
 }
 
 func NewFishServer(grpcServer *grpc.Server) FishServer {
 	fishServer := FishServer{
-		UserScores: map[string]uint{},
-		Users: map[protoGo.FishService_TryToCatchServer]bool{},
+		UserScores:    map[string]uint{},
+		Users:         map[protoGo.FishService_TryToCatchServer]bool{},
+		userLimit:     3,
+		mutex:         new(sync.Mutex),
+		completedGame: make(chan bool),
 	}
 	protoGo.RegisterFishServiceServer(grpcServer, &fishServer)
 	return fishServer
 }
+func (s *FishServer) Register(request *protoGo.RequestRegister, registerServer protoGo.FishService_RegisterServer) error {
+	if _, ok := s.UserScores[request.Username]; ok {
+		return errors.New("User is exist!")
+	}
+	s.mutex.Lock()
+	s.UserScores[request.Username] = 0
+	s.mutex.Unlock()
+	for len(s.UserScores) < s.userLimit {
+		registerServer.Send(&protoGo.ResponseRegister{Message: "Users Waiting...", Status: false})
+		time.Sleep(time.Second * 5)
+	}
+	registerServer.Send(&protoGo.ResponseRegister{Message: "Starting...", Status: true})
+	return nil
+}
 
 func (s *FishServer) TryToCatch(fStream protoGo.FishService_TryToCatchServer) error {
 	for {
-		in, err := fStream.Recv()
-		if err == io.EOF{
-			s.Users[fStream] = false
-			log.Print("Disconnection")
-			break
-		}
-		if err != nil {
-			log.Fatal(err)
-		}
-		if _, ok := s.Users[fStream]; !ok{
-			s.Users[fStream] = true
-		}
-		status := false
-		if in.X == in.Y{
-			if _, ok := s.UserScores[in.Username]; !ok {
-				s.UserScores[in.Username] = 0
+		select {
+		case <-s.completedGame:
+			return nil
+		default:
+			in, err := fStream.Recv()
+			if err == io.EOF {
+				s.mutex.Lock()
+				delete(s.Users, fStream)
+				s.mutex.Unlock()
+				log.Print("Disconnection")
+				break
 			}
-			s.UserScores[in.Username]++
-			status = true
-		}
-		for k, v:= range s.Users{
-			if v {
-				k.Send(&protoGo.ResponseMessage{Username: in.Username, Status: status})
+			if err != nil {
+				log.Fatal(err)
+			}
+			if _, ok := s.Users[fStream]; !ok {
+				s.Users[fStream] = true
+			}
+			if in.X == in.Y {
+				s.mutex.Lock()
+				s.UserScores[in.Username]++
+				s.mutex.Unlock()
+				fStream.Send(&protoGo.ResponseMessage{Username: in.Username, Status: false})
+				if s.UserScores[in.Username] > 100 {
+					for k, _ := range s.Users {
+						k.Send(&protoGo.ResponseMessage{Username: in.Username, Status: true})
+					}
+					break
+				}
 			}
 		}
 	}
 	return nil
 }
 
-func (s *FishServer) HighScore(ctx context.Context,request *protoGo.RequestHighScore) (*protoGo.ResponseHighScore, error) {
-	log.Println("Adana 2")
+func (s *FishServer) HighScore(ctx context.Context, request *protoGo.RequestHighScore) (*protoGo.ResponseHighScore, error) {
 	var highScore int64 = 0
-	if v, ok := s.UserScores[request.Username]; ok{
+	if v, ok := s.UserScores[request.Username]; ok {
 		highScore = int64(v)
 	}
 	response := protoGo.ResponseHighScore{
-		Users:    map[string]int64{
-			request.Username : highScore,
+		Users: map[string]int64{
+			request.Username: highScore,
 		},
 		YourRank: 1,
 		Status:   true,
 	}
+	s.mutex.Lock()
+	delete(s.UserScores, request.Username)
+	s.mutex.Unlock()
 	return &response, nil
 }

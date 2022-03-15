@@ -18,6 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type FishServiceClient interface {
+	Register(ctx context.Context, in *RequestRegister, opts ...grpc.CallOption) (FishService_RegisterClient, error)
 	TryToCatch(ctx context.Context, opts ...grpc.CallOption) (FishService_TryToCatchClient, error)
 	HighScore(ctx context.Context, in *RequestHighScore, opts ...grpc.CallOption) (*ResponseHighScore, error)
 }
@@ -30,8 +31,40 @@ func NewFishServiceClient(cc grpc.ClientConnInterface) FishServiceClient {
 	return &fishServiceClient{cc}
 }
 
+func (c *fishServiceClient) Register(ctx context.Context, in *RequestRegister, opts ...grpc.CallOption) (FishService_RegisterClient, error) {
+	stream, err := c.cc.NewStream(ctx, &FishService_ServiceDesc.Streams[0], "/fish.FishService/Register", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &fishServiceRegisterClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type FishService_RegisterClient interface {
+	Recv() (*ResponseRegister, error)
+	grpc.ClientStream
+}
+
+type fishServiceRegisterClient struct {
+	grpc.ClientStream
+}
+
+func (x *fishServiceRegisterClient) Recv() (*ResponseRegister, error) {
+	m := new(ResponseRegister)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *fishServiceClient) TryToCatch(ctx context.Context, opts ...grpc.CallOption) (FishService_TryToCatchClient, error) {
-	stream, err := c.cc.NewStream(ctx, &FishService_ServiceDesc.Streams[0], "/fish.FishService/TryToCatch", opts...)
+	stream, err := c.cc.NewStream(ctx, &FishService_ServiceDesc.Streams[1], "/fish.FishService/TryToCatch", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -74,6 +107,7 @@ func (c *fishServiceClient) HighScore(ctx context.Context, in *RequestHighScore,
 // All implementations must embed UnimplementedFishServiceServer
 // for forward compatibility
 type FishServiceServer interface {
+	Register(*RequestRegister, FishService_RegisterServer) error
 	TryToCatch(FishService_TryToCatchServer) error
 	HighScore(context.Context, *RequestHighScore) (*ResponseHighScore, error)
 	mustEmbedUnimplementedFishServiceServer()
@@ -83,6 +117,9 @@ type FishServiceServer interface {
 type UnimplementedFishServiceServer struct {
 }
 
+func (UnimplementedFishServiceServer) Register(*RequestRegister, FishService_RegisterServer) error {
+	return status.Errorf(codes.Unimplemented, "method Register not implemented")
+}
 func (UnimplementedFishServiceServer) TryToCatch(FishService_TryToCatchServer) error {
 	return status.Errorf(codes.Unimplemented, "method TryToCatch not implemented")
 }
@@ -100,6 +137,27 @@ type UnsafeFishServiceServer interface {
 
 func RegisterFishServiceServer(s grpc.ServiceRegistrar, srv FishServiceServer) {
 	s.RegisterService(&FishService_ServiceDesc, srv)
+}
+
+func _FishService_Register_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RequestRegister)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(FishServiceServer).Register(m, &fishServiceRegisterServer{stream})
+}
+
+type FishService_RegisterServer interface {
+	Send(*ResponseRegister) error
+	grpc.ServerStream
+}
+
+type fishServiceRegisterServer struct {
+	grpc.ServerStream
+}
+
+func (x *fishServiceRegisterServer) Send(m *ResponseRegister) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _FishService_TryToCatch_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -159,6 +217,11 @@ var FishService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Register",
+			Handler:       _FishService_Register_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "TryToCatch",
 			Handler:       _FishService_TryToCatch_Handler,
