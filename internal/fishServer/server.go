@@ -13,20 +13,22 @@ import (
 
 type FishServer struct {
 	protoGo.UnimplementedFishServiceServer
-	UserScores    map[string]uint
-	Users         map[protoGo.FishService_TryToCatchServer]bool
-	userLimit     int
-	mutex         *sync.Mutex
-	completedGame chan bool
+	UserScores      map[string]uint
+	Users           map[protoGo.FishService_TryToCatchServer]bool
+	userLimit       int
+	gameScoreConfig uint
+	mutex           *sync.Mutex
+	completedGame   chan bool
 }
 
 func NewFishServer(grpcServer *grpc.Server) FishServer {
 	fishServer := FishServer{
-		UserScores:    map[string]uint{},
-		Users:         map[protoGo.FishService_TryToCatchServer]bool{},
-		userLimit:     3,
-		mutex:         new(sync.Mutex),
-		completedGame: make(chan bool),
+		UserScores:      map[string]uint{},
+		Users:           map[protoGo.FishService_TryToCatchServer]bool{},
+		userLimit:       3,
+		gameScoreConfig: 25,
+		mutex:           new(sync.Mutex),
+		completedGame:   make(chan bool),
 	}
 	protoGo.RegisterFishServiceServer(grpcServer, &fishServer)
 	return fishServer
@@ -40,7 +42,7 @@ func (s *FishServer) Register(request *protoGo.RequestRegister, registerServer p
 	s.mutex.Unlock()
 	for len(s.UserScores) < s.userLimit {
 		registerServer.Send(&protoGo.ResponseRegister{Message: "Users Waiting...", Status: false})
-		time.Sleep(time.Second * 5)
+		time.Sleep(time.Second)
 	}
 	registerServer.Send(&protoGo.ResponseRegister{Message: "Starting...", Status: true})
 	return nil
@@ -58,10 +60,11 @@ func (s *FishServer) TryToCatch(fStream protoGo.FishService_TryToCatchServer) er
 				delete(s.Users, fStream)
 				s.mutex.Unlock()
 				log.Print("Disconnection")
+				s.completedGame <- true
 				break
 			}
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			if _, ok := s.Users[fStream]; !ok {
 				s.Users[fStream] = true
@@ -71,7 +74,7 @@ func (s *FishServer) TryToCatch(fStream protoGo.FishService_TryToCatchServer) er
 				s.UserScores[in.Username]++
 				s.mutex.Unlock()
 				fStream.Send(&protoGo.ResponseMessage{Username: in.Username, Status: false})
-				if s.UserScores[in.Username] > 100 {
+				if s.UserScores[in.Username] >= s.gameScoreConfig {
 					for k, _ := range s.Users {
 						k.Send(&protoGo.ResponseMessage{Username: in.Username, Status: true})
 					}

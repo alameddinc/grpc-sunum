@@ -74,9 +74,9 @@ func (c *FishClient) ListenAndCatch() error {
 	errChan := make(chan error)
 	// Read Bidirectional
 	go c.listen(stream, errChan)
-	c.catch(stream)
+	c.catch(stream, errChan)
 	stream.CloseSend()
-	return <-errChan
+	return nil
 }
 
 func (c *FishClient) listen(stream protoGo.FishService_TryToCatchClient, errChan chan error) {
@@ -111,14 +111,13 @@ func (c *FishClient) listen(stream protoGo.FishService_TryToCatchClient, errChan
 	return
 }
 
-func (c *FishClient) catch(stream protoGo.FishService_TryToCatchClient) {
+func (c *FishClient) catch(stream protoGo.FishService_TryToCatchClient, errChan chan error) {
 	for {
 		select {
-		case <-stream.Context().Done():
-			log.Println("Adana")
+		case <-errChan:
+			stream.CloseSend()
 			return
 		default:
-			log.Println(1)
 			time.Sleep(25 * time.Millisecond)
 			nX, err := rand.Int(rand.Reader, big.NewInt(10))
 			nY, err := rand.Int(rand.Reader, big.NewInt(10))
@@ -135,5 +134,5 @@ func (c *FishClient) HighScore() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println(res.Users)
+	log.Printf("Skorunuz: %d\n", res.Users[c.Username])
 }
