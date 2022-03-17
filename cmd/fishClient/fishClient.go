@@ -4,12 +4,13 @@ import (
 	"log"
 	_ "net/http/pprof"
 	"os"
-	"server/internal"
+
+	client "github.com/alameddinc/grpc-sunum/internal/fClient"
 )
 
 func main() {
 	// Connection
-	fishClient := internal.NewFishClient(os.Args[1])
+	fishClient := client.NewFishClient(os.Args[1])
 	defer fishClient.Close()
 	// Register (Server side stream RPC)
 	if err := fishClient.Register(); err != nil {
