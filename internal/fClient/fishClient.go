@@ -77,6 +77,9 @@ func (c *FishClient) ListenAndCatch() error {
 	go c.listen(stream, errChan)
 	c.catch(stream, errChan)
 	stream.CloseSend()
+	for len(errChan) > 0 {
+		<-errChan
+	}
 	return nil
 }
 
@@ -96,9 +99,8 @@ func (c *FishClient) listen(stream protoGo.FishService_TryToCatchClient, errChan
 				errChan <- err
 				return
 			}
-			if in.Username == c.Username {
-				c.Score++
-				log.Printf("%s %d adet balık yakaladı!", in.Username, c.Score)
+			if in.Username == c.Username || in.FishCount > 1 {
+				log.Printf("%s +%d ", in.Username, in.FishCount)
 			}
 			if in.Status {
 				log.Printf("%s Kazandı!", in.Username)
@@ -119,9 +121,9 @@ func (c *FishClient) catch(stream protoGo.FishService_TryToCatchClient, errChan 
 			stream.CloseSend()
 			return
 		default:
-			time.Sleep(25 * time.Millisecond)
-			nX, err := rand.Int(rand.Reader, big.NewInt(10))
-			nY, err := rand.Int(rand.Reader, big.NewInt(10))
+			time.Sleep(100 * time.Millisecond)
+			nX, err := rand.Int(rand.Reader, big.NewInt(1000))
+			nY, err := rand.Int(rand.Reader, big.NewInt(1000))
 			if err != nil {
 				panic(err)
 			}

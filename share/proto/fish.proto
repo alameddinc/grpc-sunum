@@ -20,7 +20,8 @@ message ResponseRegister{
 
 message ResponseMessage {
   string username = 1;
-  bool status = 4;
+  uint64 fishCount = 2;
+  bool status = 3;
 }
 
 message RequestHighScore{
