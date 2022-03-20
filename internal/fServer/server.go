@@ -92,6 +92,12 @@ func (s *FishServer) mapGenerator() {
 		if s.gameMap[x][y] > 1 {
 			continue
 		}
+		// Big Fish Group Mask
+		//  x   x  15  x   x
+		//  x  15  30  15  x
+		// 15  30  50  30 15
+		//  x  15  30  15  x
+		//  x   x  15  x   x
 		s.gameMap[x][y] = 50
 
 		s.gameMap[x-1][y] = 30
