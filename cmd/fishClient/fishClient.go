@@ -21,5 +21,5 @@ func main() {
 		log.Fatal(err)
 	}
 	// Simple RPC
-	fishClient.HighScore()
+	fishClient.Highscore()
 }

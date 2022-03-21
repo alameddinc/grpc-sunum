@@ -13,34 +13,34 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type FishClient struct {
-	Username string
-	Score    uint
+type Fishclient struct {
+	username string
+	score    uint
 	conn     *grpc.ClientConn
-	Client   protoGo.FishServiceClient
+	client   protoGo.FishServiceClient
 }
 
-func NewFishClient(username string) FishClient {
+func NewFishClient(username string) Fishclient {
 	var conn *grpc.ClientConn
 	conn, err := grpc.Dial(":9000", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal(err)
 	}
 	c := protoGo.NewFishServiceClient(conn)
-	return FishClient{
-		Username: username,
-		Score:    0,
+	return Fishclient{
+		username: username,
+		score:    0,
 		conn:     conn,
-		Client:   c,
+		client:   c,
 	}
 }
 
-func (c *FishClient) Close() error {
+func (c *Fishclient) Close() error {
 	return c.conn.Close()
 }
 
-func (c *FishClient) Register() error {
-	registerStream, err := c.Client.Register(context.Background(), &protoGo.RequestRegister{Username: c.Username})
+func (c *Fishclient) Register() error {
+	registerStream, err := c.client.Register(context.Background(), &protoGo.RequestRegister{Username: c.username})
 	defer registerStream.CloseSend()
 	if err != nil {
 		return err
@@ -66,9 +66,9 @@ func (c *FishClient) Register() error {
 	return nil
 }
 
-func (c *FishClient) ListenAndCatch() error {
+func (c *Fishclient) ListenAndCatch() error {
 	ctx := context.Background()
-	stream, err := c.Client.TryToCatch(ctx)
+	stream, err := c.client.TryToCatch(ctx)
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func (c *FishClient) ListenAndCatch() error {
 	return nil
 }
 
-func (c *FishClient) listen(stream protoGo.FishService_TryToCatchClient, errChan chan error) {
+func (c *Fishclient) listen(stream protoGo.FishService_TryToCatchClient, errChan chan error) {
 	for {
 		select {
 		case <-stream.Context().Done():
@@ -99,7 +99,7 @@ func (c *FishClient) listen(stream protoGo.FishService_TryToCatchClient, errChan
 				errChan <- err
 				return
 			}
-			if in.Username == c.Username || in.FishCount > 1 {
+			if in.Username == c.username || in.FishCount > 1 {
 				log.Printf("%s +%d ", in.Username, in.FishCount)
 			}
 			if in.Status {
@@ -114,7 +114,7 @@ func (c *FishClient) listen(stream protoGo.FishService_TryToCatchClient, errChan
 	return
 }
 
-func (c *FishClient) catch(stream protoGo.FishService_TryToCatchClient, errChan chan error) {
+func (c *Fishclient) catch(stream protoGo.FishService_TryToCatchClient, errChan chan error) {
 	for {
 		select {
 		case <-errChan:
@@ -127,15 +127,15 @@ func (c *FishClient) catch(stream protoGo.FishService_TryToCatchClient, errChan 
 			if err != nil {
 				panic(err)
 			}
-			stream.Send(&protoGo.RequestMessage{Username: c.Username, X: nX.Uint64(), Y: nY.Uint64()})
+			stream.Send(&protoGo.RequestMessage{Username: c.username, X: nX.Uint64(), Y: nY.Uint64()})
 		}
 	}
 }
 
-func (c *FishClient) HighScore() {
-	res, err := c.Client.HighScore(context.Background(), &protoGo.RequestHighScore{Username: c.Username})
+func (c *Fishclient) Highscore() {
+	res, err := c.client.HighScore(context.Background(), &protoGo.RequestHighScore{Username: c.username})
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Skorunuz: %d\n", res.Users[c.Username])
+	log.Printf("Skorunuz: %d\n", res.Users[c.username])
 }
